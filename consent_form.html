@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>임산부 등록 개인정보 동의서</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
 
@@ -350,12 +350,17 @@
             <span class="dot">◎</span> <strong>임산부정보</strong><br>
             이름, 생년월일, 주소, 연락처, 가족현황<br><br>
             <span class="dot">◎</span> <strong>고유식별정보</strong><br>
-            외국인등록번호 등<br><br>
+            외국인등록번호 등
+          </td>
+          <td>임산부 등록관리, 건강상담 및 교육, 보건 복지 서비스 연계 등 건강관리 서비스 제공</td>
+          <td rowspan="2" style="vertical-align:middle;">수집·이용 동의일로부터 개인정보의 수집·이용 목적을 달성할 때까지</td>
+        </tr>
+        <tr>
+          <td>
             <span class="dot">◎</span> <strong>가족정보</strong><br>
             이름, 관계, 연락처
           </td>
-          <td>임산부 등록관리, 건강상담 및 교육, 보건 복지 서비스 연계 등 건강관리 서비스 제공 / 임산부 자동차 표지발급 및 유축기 대여</td>
-          <td>수집·이용 동의일로부터 개인정보의 수집·이용 목적을 달성할 때까지</td>
+          <td>임산부 자동차 표지발급 및 유축기 대여</td>
         </tr>
       </table>
       <div class="notice">
@@ -550,8 +555,7 @@
 
 <script>
 // ─── Google Apps Script URL ───────────────────────────────────────────────
-// 배포 후 아래에 Apps Script 웹앱 URL을 넣으세요
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyvrBWMMsAcT2rpCdHpFoKOEp9qIwIz5DUtP0eMqJtfW0bKiA1f0YrsMKedTdpQ0HU78A/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxGd_vfXU3y1wMtLjeR2DziDDYyn5T7Yj3C7GCFoZJ7fZdTCyzQ-nj7b3PzOSlHN6Nagw/exec';
 
 // ─── Answers ──────────────────────────────────────────────────────────────
 const answers = { q1: null, q2: null, q3: null };
@@ -600,13 +604,12 @@ function initCanvas(id) {
     const touch = e.touches ? e.touches[0] : e;
     return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
   }
-
   function start(e) {
     e.preventDefault();
-    const pos = getPos(e);
     const s = sigState[id];
     s.drawing = true;
     s.ctx.beginPath();
+    const pos = getPos(e);
     s.ctx.moveTo(pos.x, pos.y);
   }
   function move(e) {
@@ -651,49 +654,57 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 
 // ─── Validation & Submit ──────────────────────────────────────────────────
 function handleSubmit() {
-  // 1. Check all consents
-  const allYes = answers.q1 === 'yes' && answers.q2 === 'yes' && answers.q3 === 'yes';
   const anyNo = answers.q1 === 'no' || answers.q2 === 'no' || answers.q3 === 'no';
   const anyMissing = answers.q1 === null || answers.q2 === null || answers.q3 === null;
+  if (anyNo || anyMissing) { openModal('modalNoConsent'); return; }
 
-  if (anyNo || anyMissing) {
-    openModal('modalNoConsent');
-    return;
-  }
-
-  // 2. Check required fields
   const name = document.getElementById('applicantName').value.trim();
   if (!name) {
     document.getElementById('missingFieldMsg').textContent = '신청인 이름을 입력해주세요.';
-    openModal('modalMissingField');
-    return;
+    openModal('modalMissingField'); return;
   }
   if (!sigState['sigApplicant']?.hasDrawn) {
     document.getElementById('missingFieldMsg').textContent = '신청인 서명을 그려주세요.';
-    openModal('modalMissingField');
-    return;
+    openModal('modalMissingField'); return;
   }
-
-  // 3. Generate PDF and send
-  generateAndSend();
+  sendData();
 }
 
-async function generateAndSend() {
+async function sendData() {
   openModal('modalSending');
   try {
-    const pdfBase64 = await buildPDF();
     const date = getKoreanDate();
-    const name = document.getElementById('applicantName').value.trim();
-    const fileName = `${date.y}${date.m}${date.d}_${name}_임산부동의서.pdf`;
+    const applicantName = document.getElementById('applicantName').value.trim();
+    const agentName = document.getElementById('agentName').value.trim();
+    const agentRelation = document.getElementById('agentRelation').value.trim();
 
-    const payload = { pdfBase64, fileName };
+    const sigApplicantBase64 = document.getElementById('sigApplicant').toDataURL('image/png').split(',')[1];
+    const sigAgentBase64 = sigState['sigAgent']?.hasDrawn
+      ? document.getElementById('sigAgent').toDataURL('image/png').split(',')[1]
+      : null;
+
+    const payload = {
+      date: `${date.y}년 ${date.m}월 ${date.d}일`,
+      fileName: `${date.y}${date.m}${date.d}_${applicantName}_임산부동의서`,
+      answers: {
+        q1: answers.q1 === 'yes' ? '■ 예  □ 아니오' : '□ 예  ■ 아니오',
+        q2: answers.q2 === 'yes' ? '■ 예  □ 아니오' : '□ 예  ■ 아니오',
+        q3: answers.q3 === 'yes' ? '■ 예  □ 아니오' : '□ 예  ■ 아니오',
+      },
+      applicantName,
+      agentName,
+      agentRelation,
+      sigApplicantBase64,
+      sigAgentBase64,
+    };
 
     const resp = await fetch(APPS_SCRIPT_URL, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
 
-    if (!resp.ok) throw new Error('서버 오류');
+    const result = await resp.json();
+    if (!result.success) throw new Error(result.error || '서버 오류');
 
     closeModal('modalSending');
     document.getElementById('successScreen').classList.add('open');
@@ -704,212 +715,6 @@ async function generateAndSend() {
     openModal('modalError');
     console.error(err);
   }
-}
-
-// ─── PDF Generation ────────────────────────────────────────────────────────
-async function buildPDF() {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-
-  // Load Korean font — fallback to built-in helvetica for now
-  // (In production, embed NotoSansKR subset as base64 for full Korean support)
-  doc.setFont('helvetica');
-
-  const margin = 15;
-  const pageW = 210;
-  const contentW = pageW - margin * 2;
-  let y = 20;
-
-  // Title
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('[임산부 등록 개인정보 수집·이용·제공 동의서]', pageW / 2, y, { align: 'center' });
-  y += 8;
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100);
-  doc.text('강서구 보건소', pageW / 2, y, { align: 'center' });
-  doc.setTextColor(0);
-  y += 8;
-
-  // Intro
-  doc.setFontSize(8.5);
-  const introText = '강서구 보건소에서는 임산부 등록과 관련하여 귀하의 개인정보를 수집·이용 및 제공하고자 하오니, 아래의 내용을 자세히 읽어보신 후 동의 여부를 결정하여 주시기 바랍니다.';
-  const introLines = doc.splitTextToSize(introText, contentW);
-  doc.text(introLines, margin, y);
-  y += introLines.length * 4 + 4;
-
-  // Helper: section header
-  function sectionHeader(title) {
-    doc.setFillColor(45, 106, 79);
-    doc.rect(margin, y, contentW, 7, 'F');
-    doc.setTextColor(255);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text(title, margin + 3, y + 5);
-    doc.setTextColor(0);
-    doc.setFont('helvetica', 'normal');
-    y += 9;
-  }
-
-  // Helper: table row
-  function tableRow(cells, widths, isHeader = false) {
-    const rowH = 14;
-    let x = margin;
-    cells.forEach((cell, i) => {
-      if (isHeader) {
-        doc.setFillColor(216, 243, 220);
-        doc.rect(x, y, widths[i], rowH, 'F');
-      }
-      doc.setDrawColor(200);
-      doc.rect(x, y, widths[i], rowH);
-      doc.setFontSize(7.5);
-      doc.setFont('helvetica', isHeader ? 'bold' : 'normal');
-      const lines = doc.splitTextToSize(cell, widths[i] - 4);
-      doc.text(lines, x + 2, y + 4);
-      x += widths[i];
-    });
-    y += rowH;
-  }
-
-  // Helper: checkbox answer
-  function answerLine(q, label) {
-    const val = answers[q];
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text(label, margin, y);
-    const yesBox = margin + 85;
-    const noBox = yesBox + 22;
-    doc.rect(yesBox, y - 4, 4, 4);
-    doc.rect(noBox, y - 4, 4, 4);
-    doc.setFont('helvetica', 'normal');
-    doc.text('예', yesBox + 5, y);
-    doc.text('아니오', noBox + 5, y);
-    if (val === 'yes') {
-      doc.setFont('helvetica', 'bold');
-      doc.text('V', yesBox + 0.5, y - 0.5);
-      doc.setFont('helvetica', 'normal');
-    } else if (val === 'no') {
-      doc.setFont('helvetica', 'bold');
-      doc.text('V', noBox + 0.5, y - 0.5);
-      doc.setFont('helvetica', 'normal');
-    }
-    y += 6;
-  }
-
-  // SECTION 1
-  sectionHeader('1. 개인정보 수집·이용에 관한 동의');
-  tableRow(['수집항목', '수집목적', '보유·이용기간'], [70, 60, 50], true);
-  tableRow(
-    ['◎ 임산부정보(이름, 생년월일, 주소, 연락처, 가족현황)\n◎ 고유식별정보(외국인등록번호 등)\n◎ 가족정보(이름, 관계, 연락처)',
-     '임산부 등록관리, 건강상담 및 교육, 보건 복지 서비스 연계 등 건강관리 서비스 제공 / 임산부 자동차 표지발급 및 유축기 대여',
-     '수집·이용 동의일로부터 목적을 달성할 때까지'],
-    [70, 60, 50]
-  );
-  y += 2;
-  doc.setFontSize(7);
-  const notice1 = '※ 주민등록번호는 개인정보 보호법 제15조 제1항 제3호에 의거 지역보건법 제11조, 동법 시행령 제24조 등에 따라 수집 및 처리합니다.';
-  const n1lines = doc.splitTextToSize(notice1, contentW);
-  doc.text(n1lines, margin, y);
-  y += n1lines.length * 3.5 + 1;
-  const notice2 = '※ 위와 같이 개인정보를 처리하는 데 동의를 거부할 권리가 있습니다. 그러나 동의를 거부할 경우 임산부 등록 관리 및 서비스 제공이 제한될 수 있습니다.';
-  const n2lines = doc.splitTextToSize(notice2, contentW);
-  doc.text(n2lines, margin, y);
-  y += n2lines.length * 3.5 + 3;
-  answerLine('q1', '위와 같이 개인정보를 수집·이용하는데 동의하십니까?');
-  y += 4;
-
-  // SECTION 2
-  sectionHeader('2. 민감정보 수집·이용에 관한 동의');
-  tableRow(['수집항목', '수집목적', '보유·이용기간'], [70, 60, 50], true);
-  tableRow(
-    ['◎ 임신정보 및 임신력정보, 분만정보, 검사결과',
-     '임산부 등록관리, 건강상담 및 교육, 보건 복지 서비스 연계 등 건강관리 서비스 제공',
-     '수집·이용 동의일로부터 목적을 달성할 때까지'],
-    [70, 60, 50]
-  );
-  y += 2;
-  doc.setFontSize(7);
-  const n3lines = doc.splitTextToSize(notice2, contentW);
-  doc.text(n3lines, margin, y);
-  y += n3lines.length * 3.5 + 3;
-  answerLine('q2', '위와 같이 개인정보를 수집·이용하는데 동의하십니까?');
-  y += 4;
-
-  // SECTION 3
-  sectionHeader('3. 개인정보 제3자 제공에 관한 동의');
-  tableRow(['제공받는 자', '제공항목', '제공목적', '보유·이용기간'], [45, 45, 50, 40], true);
-  tableRow(
-    ['보건복지부, 서울시, 한국건강증진개발원, 한국사회보장정보원, 위탁검사서비스 연계기관',
-     '이름, 생년월일, 주소, 휴대폰 번호 등 인적정보, 임신관련 정보 및 검사 결과',
-     '건강관리 서비스 제공, 사업 효과평가 및 정책방향 통계자료 활용 등',
-     '수집·이용 동의일로부터 목적 달성할 때까지'],
-    [45, 45, 50, 40]
-  );
-  y += 2;
-  doc.setFontSize(7);
-  const notice4 = '◉ 전자정보의 관리: 개인정보에 대한 전자화 정보 관리는 지역보건법 제30조 제4항에 의해 \'한국사회보장정보원\'에서 대행 관리합니다.';
-  const n4lines = doc.splitTextToSize(notice4, contentW);
-  doc.text(n4lines, margin, y);
-  y += n4lines.length * 3.5 + 1;
-  const n5lines = doc.splitTextToSize(notice2, contentW);
-  doc.text(n5lines, margin, y);
-  y += n5lines.length * 3.5 + 3;
-  answerLine('q3', '위와 같이 개인정보를 수집·이용하는데 동의하십니까?');
-  y += 6;
-
-  // Date & signatures
-  const date = getKoreanDate();
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`${date.y}년  ${date.m}월  ${date.d}일`, pageW / 2, y, { align: 'center' });
-  y += 10;
-
-  const sigW = 55;
-  const sigH = 20;
-
-  // Applicant
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  const appName = document.getElementById('applicantName').value.trim();
-  doc.text('신청인:  ' + appName, margin, y + 5);
-  doc.rect(margin + 60, y, sigW, sigH);
-  doc.setFontSize(7);
-  doc.setTextColor(150);
-  doc.text('(서명)', margin + 60 + sigW / 2, y + 2, { align: 'center' });
-  doc.setTextColor(0);
-  // Add signature image
-  const sigApplicantData = document.getElementById('sigApplicant').toDataURL('image/png');
-  doc.addImage(sigApplicantData, 'PNG', margin + 61, y + 2, sigW - 2, sigH - 4);
-  y += sigH + 6;
-
-  // Agent (optional)
-  const agentName = document.getElementById('agentName').value.trim();
-  const agentRelation = document.getElementById('agentRelation').value.trim();
-  const agentSig = sigState['sigAgent']?.hasDrawn;
-
-  doc.setFontSize(8);
-  doc.text('(대리신청시)', margin, y + 5);
-  y += 7;
-  doc.setFontSize(9);
-  doc.text('대리인:  ' + (agentName || ''), margin, y + 5);
-  doc.rect(margin + 60, y, sigW, sigH);
-  doc.setFontSize(7);
-  doc.setTextColor(150);
-  doc.text('(서명)', margin + 60 + sigW / 2, y + 2, { align: 'center' });
-  doc.setTextColor(0);
-  if (agentSig) {
-    const sigAgentData = document.getElementById('sigAgent').toDataURL('image/png');
-    doc.addImage(sigAgentData, 'PNG', margin + 61, y + 2, sigW - 2, sigH - 4);
-  }
-  doc.text('관계:  ' + (agentRelation || ''), margin + 120, y + 5);
-  y += sigH + 8;
-
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.text('서울특별시 강서구청장 귀하', pageW - margin, y, { align: 'right' });
-
-  return doc.output('datauristring').split(',')[1];
 }
 </script>
 </body>
