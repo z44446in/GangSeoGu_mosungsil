@@ -733,7 +733,7 @@ async function sendData() {
 
   } catch (err) {
     closeModal('modalSending');
-    document.getElementById('errorMsg').textContent = '전송 중 오류가 발생했습니다. 네트워크를 확인하거나 다시 시도해주세요.';
+    document.getElementById('errorMsg').textContent = '오류: ' + (err?.message || String(err));
     openModal('modalError');
     console.error(err);
   }
